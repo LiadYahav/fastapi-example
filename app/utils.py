@@ -1,7 +1,6 @@
-from pwdlib import PasswordHash
-from pwdlib.hashers.bcrypt import BcryptHasher
+from passlib.context import CryptContext
 
-pwd = PasswordHash((BcryptHasher(),))
+pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def hash(password: str) -> str:

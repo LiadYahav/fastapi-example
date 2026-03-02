@@ -21,7 +21,8 @@ class Post(Base):
     owner_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False
+        nullable=False,
+        index=True
     )
 
     owner = relationship("User")
