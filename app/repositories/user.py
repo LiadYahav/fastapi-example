@@ -1,22 +1,26 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from .. import models
 
 
-def get_by_id(db: Session, id: int) -> models.User | None:
-    return db.query(models.User).filter(models.User.id == id).first()
+async def get_by_id(db: AsyncSession, id: int) -> models.User | None:
+    result = await db.execute(select(models.User).where(models.User.id == id))
+    return result.scalar_one_or_none()
 
 
-def get_by_email(db: Session, email: str) -> models.User | None:
-    return db.query(models.User).filter(models.User.email == email).first()
+async def get_by_email(db: AsyncSession, email: str) -> models.User | None:
+    result = await db.execute(select(models.User).where(models.User.email == email))
+    return result.scalar_one_or_none()
 
 
-def get_all(db: Session) -> list[models.User]:
-    return db.query(models.User).all()
+async def get_all(db: AsyncSession) -> list[models.User]:
+    result = await db.execute(select(models.User))
+    return list(result.scalars().all())
 
 
-def create(db: Session, email: str, hashed_password: str) -> models.User:
+async def create(db: AsyncSession, email: str, hashed_password: str) -> models.User:
     user = models.User(email=email, password=hashed_password)
     db.add(user)
-    db.commit()
-    db.refresh(user)
+    await db.commit()
+    await db.refresh(user)
     return user

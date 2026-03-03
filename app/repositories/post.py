@@ -1,49 +1,59 @@
-from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 from .. import models, schemas
 
 
-def get_by_id(db: Session, id: int) -> models.Post | None:
-    return db.query(models.Post).filter(models.Post.id == id).first()
+async def get_by_id(db: AsyncSession, id: int) -> models.Post | None:
+    result = await db.execute(
+        select(models.Post).where(models.Post.id == id)
+    )
+    return result.scalar_one_or_none()
 
 
-def get_all_with_votes(db: Session, limit: int, skip: int, search: str):
-    query = db.query(
+async def get_all_with_votes(db: AsyncSession, limit: int, skip: int, search: str):
+    query = select(
         models.Post, func.count(models.Vote.post_id).label("votes")
     ).join(
         models.Vote, models.Post.id == models.Vote.post_id, isouter=True
-    ).group_by(models.Post.id)
+    ).group_by(models.Post.id).options(selectinload(models.Post.owner))
 
     if search:
-        query = query.filter(models.Post.title.ilike(f"%{search}%"))
+        query = query.where(models.Post.title.ilike(f"%{search}%"))
 
-    return query.limit(limit).offset(skip).all()
-
-
-def get_by_id_with_votes(db: Session, id: int):
-    return db.query(
-        models.Post, func.count(models.Vote.post_id).label("votes")
-    ).join(
-        models.Vote, models.Post.id == models.Vote.post_id, isouter=True
-    ).group_by(models.Post.id).filter(models.Post.id == id).first()
+    result = await db.execute(query.limit(limit).offset(skip))
+    return result.all()
 
 
-def create(db: Session, owner_id: int, post_data: schemas.PostCreate) -> models.Post:
+async def get_by_id_with_votes(db: AsyncSession, id: int):
+    result = await db.execute(
+        select(models.Post, func.count(models.Vote.post_id).label("votes"))
+        .join(models.Vote, models.Post.id == models.Vote.post_id, isouter=True)
+        .group_by(models.Post.id)
+        .where(models.Post.id == id)
+        .options(selectinload(models.Post.owner))
+    )
+    return result.first()
+
+
+async def create(db: AsyncSession, owner_id: int, post_data: schemas.PostCreate) -> models.Post:
     post = models.Post(owner_id=owner_id, **post_data.model_dump())
     db.add(post)
-    db.commit()
-    db.refresh(post)
+    await db.commit()
+    await db.refresh(post)
+    await db.refresh(post, attribute_names=['owner'])
     return post
 
 
-def update(db: Session, post: models.Post, post_data: schemas.PostUpdate) -> models.Post:
+async def update(db: AsyncSession, post: models.Post, post_data: schemas.PostUpdate) -> models.Post:
     for key, value in post_data.model_dump().items():
         setattr(post, key, value)
-    db.commit()
-    db.refresh(post)
+    await db.commit()
+    await db.refresh(post)
+    await db.refresh(post, attribute_names=['owner'])
     return post
 
 
-def delete(db: Session, post: models.Post) -> None:
-    db.delete(post)
-    db.commit()
+async def delete(db: AsyncSession, post: models.Post) -> None:
+    await db.delete(post)
+    await db.commit()
